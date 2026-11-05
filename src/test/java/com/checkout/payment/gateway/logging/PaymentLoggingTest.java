@@ -1,6 +1,10 @@
 package com.checkout.payment.gateway.logging;
 
+import static com.checkout.payment.gateway.logging.CorrelationIdFilter.CORRELATION_ID_HEADER;
+import static com.checkout.payment.gateway.logging.CorrelationIdFilter.CORRELATION_ID_KEY;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -19,6 +23,8 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,13 +35,13 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 /**
  * What the application writes to its logs while it handles a payment. Card details must never reach
- * them.
+ * them, and every line must be attributable to the request that produced it.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -83,7 +89,7 @@ class PaymentLoggingTest {
   @Test
   @DisplayName("No log line carries the card number or the CVV")
   void neverLogsTheCardNumberOrTheCvv() throws Exception {
-    postPayment();
+    postPayment(null);
 
     for (String message : loggedMessages()) {
       assertFalse(message.contains(PAN), () -> "A log line printed the PAN: " + message);
@@ -94,16 +100,40 @@ class PaymentLoggingTest {
   }
 
   @Test
-  @DisplayName("A payment leaves a trail from the controller through to the stored result")
+  @DisplayName("A payment leaves a trail from the controller through to the bank call")
   void logsEveryStageOfAPayment() throws Exception {
-    postPayment();
+    postPayment(null);
 
     String trail = String.join("\n", loggedMessages());
+    assertTrue(trail.contains("--> POST /payment"), trail);
     assertTrue(trail.contains("Accepted a payment request"), trail);
     assertTrue(trail.contains("Submitting a payment"), trail);
     assertTrue(trail.contains("authorized"), trail);
     assertTrue(trail.contains("Stored payment"), trail);
-    assertTrue(trail.contains("finished with status"), trail);
+    assertTrue(trail.contains("responded 200"), trail);
+  }
+
+  @Test
+  @DisplayName("Every line of a request's trail carries that request's correlation id")
+  void tagsEveryLineWithTheCorrelationId() throws Exception {
+    MvcResult result = postPayment("order-4921");
+
+    assertEquals("order-4921", result.getResponse().getHeader(CORRELATION_ID_HEADER));
+    Set<String> correlationIds = appender.list.stream()
+        .map(event -> event.getMDCPropertyMap().get(CORRELATION_ID_KEY))
+        .collect(Collectors.toSet());
+    assertEquals(Set.of("order-4921"), correlationIds);
+  }
+
+  @Test
+  @DisplayName("Two requests are told apart by their correlation ids")
+  void givesSeparateRequestsSeparateIds() throws Exception {
+    String first = postPayment(null).getResponse().getHeader(CORRELATION_ID_HEADER);
+    String second = postPayment(null).getResponse().getHeader(CORRELATION_ID_HEADER);
+
+    assertNotNull(first);
+    assertNotNull(second);
+    assertFalse(first.equals(second), "Each request should get its own correlation id");
   }
 
   @Test
@@ -122,12 +152,14 @@ class PaymentLoggingTest {
     assertFalse(trail.contains(PAN), () -> "A log line printed the rejected PAN: " + trail);
   }
 
-  private MvcResult postPayment() throws Exception {
-    return mvc.perform(MockMvcRequestBuilders.post("/payment")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(JSON.writeValueAsString(validBody())))
-        .andExpect(status().isOk())
-        .andReturn();
+  private MvcResult postPayment(String correlationId) throws Exception {
+    var request = MockMvcRequestBuilders.post("/payment")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(JSON.writeValueAsString(validBody()));
+    if (correlationId != null) {
+      request = request.header(CORRELATION_ID_HEADER, correlationId);
+    }
+    return mvc.perform(request).andExpect(status().isOk()).andReturn();
   }
 
   private List<String> loggedMessages() {

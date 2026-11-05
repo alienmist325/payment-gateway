@@ -1,5 +1,6 @@
 package com.checkout.payment.gateway.validation;
 
+import com.checkout.payment.gateway.logging.LogSafe;
 import com.checkout.payment.gateway.properties.CurrencyProperties;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
@@ -29,7 +30,7 @@ public class SupportedCurrencyValidator implements ConstraintValidator<Supported
     if (supportedCurrencies.contains(value)) {
       return true;
     }
-    LOG.debug("Rejecting a payment in an unsupported currency");
+    LOG.debug("Currency '{}' is not supported", LogSafe.text(value));
     context.disableDefaultConstraintViolation();
     context.buildConstraintViolationWithTemplate(message).addConstraintViolation();
     return false;
