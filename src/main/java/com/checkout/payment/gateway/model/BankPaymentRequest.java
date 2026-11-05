@@ -70,14 +70,28 @@ public class BankPaymentRequest implements Serializable {
     this.cvv = cvv;
   }
 
+  /**
+   * Masks the card number and omits the CVV entirely.
+   *
+   * <p>This object is the body of an outbound request, so it ends up in client debug logs and in
+   * the message of any exception that quotes the request. Printing the full PAN or the CVV there
+   * would put cardholder data in the logs, which PCI DSS forbids outright for the CVV.
+   */
   @Override
   public String toString() {
-    return "PostPaymentRequest{" +
-        "cardNumberLastFour=" + cardNumber +
+    return "BankPaymentRequest{" +
+        "cardNumber=" + maskedCardNumber() +
         ", expiryDate=" + expiryDate +
         ", currency='" + currency + '\'' +
         ", amount=" + amount +
-        ", cvv=" + cvv +
+        ", cvv=***" +
         '}';
+  }
+
+  private String maskedCardNumber() {
+    if (cardNumber == null || cardNumber.length() < 4) {
+      return "****";
+    }
+    return "****" + cardNumber.substring(cardNumber.length() - 4);
   }
 }
