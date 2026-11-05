@@ -7,6 +7,10 @@ plugins {
 group = 'com.checkout'
 version = '0.0.1-SNAPSHOT'
 
+// Overrides the Spring Boot BOM's managed 1.19.8. Declaring the version on the dependency
+// is not enough: the BOM still forces the transitive core artifact back down.
+ext['testcontainers.version'] = '1.21.3'
+
 java {
   sourceCompatibility = '17'
 }
@@ -26,4 +30,91 @@ dependencies {
 
 tasks.named('test') {
   useJUnitPlatform()
+}
+
+// Black-box E2E suite: no main.output on the classpath, so tests assert on raw JSON
+// over HTTP rather than sharing the app's DTOs.
+sourceSets {
+  e2eTest {}
+}
+
+configurations.named('e2eTestImplementation') { extendsFrom configurations.testImplementation }
+configurations.named('e2eTestRuntimeOnly') { extendsFrom configurations.testRuntimeOnly }
+
+dependencies {
+  // Version from ext['testcontainers.version'] above.
+  e2eTestImplementation 'org.testcontainers:junit-jupiter'
+}
+
+ext.e2eImageTag = 'payment-gateway:e2e'
+
+tasks.register('requireDocker', Exec) {
+  group = 'verification'
+  description = 'Fails with a readable message when the Docker daemon is unreachable.'
+  def serverVersion = new ByteArrayOutputStream()
+  // `docker info --format` exits 0 even when the daemon is unreachable, printing an empty
+  // server version, so the output is checked as well as the exit code.
+  commandLine 'docker', 'info', '--format', '{{.ServerVersion}}'
+  standardOutput = serverVersion
+  errorOutput = new ByteArrayOutputStream()
+  ignoreExitValue = true
+  doLast {
+    if (executionResult.get().exitValue != 0 || serverVersion.toString().trim().isEmpty()) {
+      throw new GradleException(
+          'Docker is not reachable.\n' +
+              '  The e2eTest suite builds and runs real containers, so it needs a Docker\n' +
+              '  daemon that is already running and reachable from this shell.\n' +
+              '  Check `docker info`; if the daemon runs inside WSL, run Gradle from there\n' +
+              '  or point DOCKER_HOST at it. Then re-run:\n' +
+              '      ./gradlew e2eTest')
+    }
+  }
+}
+
+tasks.register('buildE2eImage', Exec) {
+  group = 'build'
+  description = "Builds ${e2eImageTag} from the project Dockerfile."
+  dependsOn tasks.named('requireDocker')
+  workingDir projectDir
+  // Built by the CLI rather than Testcontainers so the build log is visible in Gradle.
+  // BuildKit is not forced: whichever builder Docker defaults to can build this Dockerfile.
+  commandLine 'docker', 'build', '-f', 'Dockerfile', '-t', e2eImageTag, '.'
+}
+
+tasks.register('e2eTest', Test) {
+  group = 'verification'
+  description = 'Runs end-to-end tests against the containerised gateway and bank simulator.'
+  dependsOn tasks.named('buildE2eImage')
+  shouldRunAfter tasks.named('test')
+
+  testClassesDirs = sourceSets.e2eTest.output.classesDirs
+  classpath = sourceSets.e2eTest.runtimeClasspath
+  useJUnitPlatform()
+
+  maxParallelForks = 1           // containers are shared across the suite
+  outputs.upToDateWhen { false } // depends on Docker state, never up to date
+
+  // docker-java otherwise negotiates API 1.32, which daemons from Docker 25 on reject:
+  // "client version 1.32 is too old. Minimum supported API version is 1.40". The knob is
+  // the api.version property, or API_VERSION in the environment.
+  systemProperty 'api.version', '1.44'
+  environment 'API_VERSION', '1.44'
+
+  systemProperty 'e2e.image', e2eImageTag
+  systemProperty 'e2e.imposterFile',
+      layout.projectDirectory.file('imposters/bank_simulator.ejs').asFile.absolutePath
+
+  testLogging {
+    events 'passed', 'skipped', 'failed'
+    exceptionFormat = 'full'
+    // Container and Docker-discovery logging goes to the worker's stdout; without this a
+    // startup failure is reported with no explanation of why.
+    showStandardStreams = true
+  }
+}
+
+// Compile the suite during `build` to catch errors without needing Docker. `check` does
+// not depend on e2eTest itself, which is what keeps `./gradlew build` Docker-free.
+tasks.named('check') {
+  dependsOn tasks.named('compileE2eTestJava')
 }
