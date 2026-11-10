@@ -34,7 +34,7 @@ class BankFailureE2eTest extends AbstractE2eTest {
     assertThat(title).isEqualTo("Request failed");
     assertThat(detail).isEqualTo("The acquiring bank is currently unavailable.");
     assertThat(status).isEqualTo(503);
-    assertThat(paymentStatus).isEqualTo("Rejected");
+    assertThat(paymentStatus).as("the gateway reached no decision, so reports no status").isNull();
     assertThat(errors).as("nothing was wrong with the request itself").isEmpty();
   }
 
@@ -56,7 +56,9 @@ class BankFailureE2eTest extends AbstractE2eTest {
       String paymentStatus = read(body, "$.payment_status");
 
       assertThat(detail).isEqualTo("The acquiring bank could not be reached.");
-      assertThat(paymentStatus).isEqualTo("Rejected");
+      assertThat(paymentStatus)
+          .as("the gateway reached no decision, so reports no status")
+          .isNull();
     }
   }
 }

@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.checkout.payment.gateway.enums.PaymentStatus;
 import com.checkout.payment.gateway.exception.BankException;
 import com.checkout.payment.gateway.exception.BankFailure;
 import com.checkout.payment.gateway.service.RequestService;
@@ -30,6 +29,8 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 /**
  * What a client receives when the call to the bank fails.
+ *
+ * <p>The gateway never reached a decision on these, so no payment status is reported.
  */
 @WebMvcTest(PaymentGatewayController.class)
 @TestPropertySource(properties = "payments.currencies.supported-currencies=GBP,USD,EUR")
@@ -73,7 +74,7 @@ class PaymentGatewayControllerBankFailureTest {
     postPaymentFailingWith(BankFailure.BANK_REJECTED_REQUEST)
         .andExpect(status().isBadGateway())
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-        .andExpect(jsonPath("$.payment_status").value(PaymentStatus.REJECTED.getName()))
+        .andExpect(jsonPath("$.payment_status").doesNotExist())
         .andExpect(jsonPath("$.status").value(502))
         .andExpect(jsonPath("$.detail")
             .value("The acquiring bank rejected the request from this gateway."));
@@ -83,7 +84,7 @@ class PaymentGatewayControllerBankFailureTest {
   void bankServerErrorIsReportedAsServiceUnavailable() throws Exception {
     postPaymentFailingWith(BankFailure.BANK_UNAVAILABLE)
         .andExpect(status().isServiceUnavailable())
-        .andExpect(jsonPath("$.payment_status").value(PaymentStatus.REJECTED.getName()))
+        .andExpect(jsonPath("$.payment_status").doesNotExist())
         .andExpect(jsonPath("$.status").value(503))
         .andExpect(jsonPath("$.detail").value("The acquiring bank is currently unavailable."));
   }
@@ -92,7 +93,7 @@ class PaymentGatewayControllerBankFailureTest {
   void unreachableBankIsReportedAsBadGateway() throws Exception {
     postPaymentFailingWith(BankFailure.BANK_UNREACHABLE)
         .andExpect(status().isBadGateway())
-        .andExpect(jsonPath("$.payment_status").value(PaymentStatus.REJECTED.getName()))
+        .andExpect(jsonPath("$.payment_status").doesNotExist())
         .andExpect(jsonPath("$.detail").value("The acquiring bank could not be reached."));
   }
 }
