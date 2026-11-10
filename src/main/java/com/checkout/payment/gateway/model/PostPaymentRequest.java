@@ -68,8 +68,7 @@ public record PostPaymentRequest(
     Integer expiryYear,
 
     @Schema(
-        description = "ISO 4217 currency code. The gateway accepts GBP, USD and EUR unless the "
-            + "deployment overrides `PAYMENTS_SUPPORTED_CURRENCIES`.",
+        description = "ISO 4217 currency code. The gateway accepts currencies it has configured`.",
         example = "GBP",
         allowableValues = {"GBP", "USD", "EUR"},
         requiredMode = Schema.RequiredMode.REQUIRED)
@@ -79,7 +78,7 @@ public record PostPaymentRequest(
 
     @Schema(
         description = "Amount to charge, in the currency's **minor unit** and as a whole "
-            + "number: `10500` is £105.00, not £10,500. Must be greater than zero.",
+            + "number: `10500` is £105.00. Must be greater than zero.",
         example = "10500",
         minimum = "1",
         requiredMode = Schema.RequiredMode.REQUIRED)

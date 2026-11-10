@@ -11,9 +11,9 @@ import org.springframework.http.ProblemDetail;
 @Schema(
     name = "ErrorResponse",
     description = """
-        An RFC 9457 problem detail, returned as `application/problem+json` whenever a request
+        A standard problem detail, returned as `application/problem+json` whenever a request
         could not be processed. `title` names the kind of failure, `detail` describes this
-        occurrence, and `error` lists the offending fields when the failure was a validation
+        occurrence, and `error` lists the invalid fields when the failure was a validation
         one.""",
     example = """
         {
@@ -64,7 +64,7 @@ public class ErrorResponse extends ProblemDetail {
       description = "One field that failed validation.")
   public record FieldViolation(
       @Schema(
-          description = "The offending field, named as it appears in the request body. "
+          description = "The invalid field, named as it appears in the request body. "
               + "`request` means the violation spans more than one field, as an expired card "
               + "does.",
           example = "card_number")

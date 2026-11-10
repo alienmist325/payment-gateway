@@ -36,13 +36,12 @@ public record PaymentResponse(
 
     @Schema(
         description = "The bank's decision. `Authorized` means the funds were approved; "
-            + "`Declined` means the bank refused them, which is still a successful request.",
+            + "`Declined` means the bank refused them, but this is still a successful request.",
         requiredMode = Schema.RequiredMode.REQUIRED)
     PaymentStatus paymentStatus,
 
     @Schema(
-        description = "HTTP status of the response, repeated in the body for callers that log "
-            + "the payload alone. Always `200` here.",
+        description = "HTTP status of the response, repeated in the body. Always `200` here.",
         example = "200",
         requiredMode = Schema.RequiredMode.REQUIRED)
     int status,
@@ -80,8 +79,7 @@ public record PaymentResponse(
     int amount,
 
     @Schema(
-        description = "Why the payment was not taken, when the gateway has a reason to give. "
-            + "Omitted from the response when absent.",
+        description = "Why the payment was not taken, when the gateway has a reason. ",
         requiredMode = Schema.RequiredMode.NOT_REQUIRED,
         nullable = true)
     @Nullable String rejectionMessage

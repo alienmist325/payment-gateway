@@ -108,16 +108,17 @@ public class PaymentGatewayController {
       summary = "Process a payment",
       description = """
           Validates a card payment, sends it to the acquiring bank and returns the bank's
-          decision. The call is synchronous: by the time it returns, the payment has been
-          attempted and stored under the `id` in the response.
+          decision.
+          
+          Any payment that is processed by the bank returns a **200**: that is, an authorized
+          payment returns a **200** and a declined payment also returns a **200**.
 
-          **A declined payment is a 200.** `payment_status` carries the bank's decision,
-          `Authorized` or `Declined`; a 4xx or 5xx means the payment was never attempted or its
-          outcome is unknown, and nothing is stored.
+          A 4xx or 5xx means the payment was never attempted or its outcome is unknown, and nothing
+          is stored.
 
           The gateway validates the card number, expiry date, currency, amount and CVV before
           calling the bank. A request that fails validation is rejected with **400** and a list
-          of the offending fields; the card number and CVV are masked to `***` in that list.
+          of the invalid fields; the card number and CVV are masked to `***` in that list.
           """,
       requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
           required = true,

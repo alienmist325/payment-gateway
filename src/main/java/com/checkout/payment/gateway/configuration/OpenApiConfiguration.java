@@ -27,8 +27,8 @@ public class OpenApiConfiguration {
       The gateway does two things:
 
       - **`POST /payment`** validates a card payment, sends it to the acquiring bank and returns
-        the bank's decision synchronously. Every request that reaches the bank is stored, whether
-        it was authorized or declined.
+        the bank's decision synchronously. Every request that reaches the bank is stored and 
+        returned, whether it was authorized or declined.
       - **`GET /payment/{id}`** returns a previously processed payment by its gateway ID.
 
       ### Request and response format
@@ -51,10 +51,7 @@ public class OpenApiConfiguration {
       | 405 | The HTTP method is not supported on this path |
       | 415 | The `Content-Type` is not `application/json` |
       | 502 | The acquiring bank rejected the request or could not be reached |
-      | 503 | The acquiring bank is unavailable |
-
-      A 502 leaves the outcome of the payment unknown, so it should not be retried blindly. A 503
-      means no payment was taken and the request is safe to retry.
+      | 503 | The acquiring bank is unavailable (safe to retry since no payment was taken) |
       """;
 
   @Bean
@@ -73,9 +70,8 @@ public class OpenApiConfiguration {
   }
 
   /**
-   * Makes the generated schemas name their properties the way the API actually serialises them.
-   * Without this the schemas are camelCase while the wire format is snake_case, so a generated
-   * client would send fields the gateway rejects.
+   * Required since the schemas are camelCase while the wire format is snake_case, so corrects for
+   * this.
    */
   @Bean
   public ModelResolver modelResolver(ObjectMapper objectMapper) {
@@ -83,9 +79,8 @@ public class OpenApiConfiguration {
   }
 
   /**
-   * Drops the {@code properties} entry {@code ProblemDetail} contributes to the error schema.
-   * Jackson spreads those across the body as an any-getter, so no response ever carries a field
-   * by that name and documenting one would send readers looking for something that is not there.
+   * Drops the {@code properties} entry {@code ProblemDetail} parts of the error schema since
+   * Jackson spreads those across the body thus the fields do not show up as expected.
    */
   @Bean
   public OpenApiCustomizer hideProblemDetailProperties() {

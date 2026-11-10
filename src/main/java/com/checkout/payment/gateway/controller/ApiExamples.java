@@ -1,11 +1,7 @@
 package com.checkout.payment.gateway.controller;
 
 /**
- * Example payloads rendered in the OpenAPI document. They are compile-time constants so they can
- * be referenced from annotations, and they are kept out of the controller to keep it readable.
- *
- * <p>Every example here was taken from a real response, so it shows the exact shape a caller
- * gets.
+ * Example payloads rendered in the OpenAPI document.
  */
 final class ApiExamples {
 
