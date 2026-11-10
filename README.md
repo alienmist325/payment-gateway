@@ -1,52 +1,94 @@
-# Instructions for candidates
-
-This is the Java version of the Payment Gateway challenge. If you haven't already read this [README.md](https://github.com/cko-recruitment/) on the details of this exercise, please do so now.
-
 ## Requirements
+
 - JDK 17
 - Docker
 
-## Template structure
+## Project structure
 
-src/ - A skeleton SpringBoot Application
+main/ - the Payment Gateway
 
 test/ - Some simple JUnit tests
 
 imposters/ - contains the bank simulator configuration. Don't change this
 
-.editorconfig - don't change this. It ensures a consistent set of rules for submissions when reformatting code
+.editorconfig - don't change this. It ensures a consistent set of rules for submissions when
+reformatting code
 
 docker-compose.yml - configures the bank simulator
 
+## Running the application
+
+The `PaymentGatewayApplication` run configuration launches the gateway (running the
+`payment-gateway-challenge-java.main` module).
+
+Typically, this can be run against the mock acquiring bank simulator, typically launched from a
+docker container.
+
+## Running the container
+
+Create a `.env` at the root, using `.env.example` as a guide.
+
+Crucially, set the profile as per your needs:
+
+- `bank` can be used to run a container with the acquiring bank simulator.
+- `gateway` can be used to run a container with the gateway
+- `all` can be used to run both simultaneously.
+
+Then run `docker compose up` from the repository root.
 
 ## Tests
 
+We have the following tests:
+
+- Unit tests (e.g. testing controller, processor etc. in isolation)
+- E2E tests (i.e. testing the flow from request to response, using a mock storage repository and
+  mock bank system)
+
+### Unit Tests
+
+Uses Mockito. Run the following:
+
 ```
 ./gradlew build      # unit tests; no Docker needed
+```
+
+### E2E Tests
+
+Uses Testcontainers for the app and bank mock. Run the following:
+
+```
 ./gradlew e2eTest    # end-to-end suite; requires Docker
 ```
 
-`e2eTest` builds the application image, starts it alongside the bank simulator with
-Testcontainers, and sends real HTTP requests to the containerised gateway. The first run is
-slow (several minutes) because the image build downloads Gradle and all dependencies inside
-the container; later runs hit the Docker layer cache.
-
-**A Docker daemon must already be running and reachable from the shell you run Gradle in** —
-the suite does not start one. Check with `docker info`. If the daemon lives inside WSL, run
-Gradle from there too, or point `DOCKER_HOST` at it; otherwise `e2eTest` stops immediately
-with a message rather than hanging. BuildKit is not required.
-
-The suite lives in `src/e2eTest` and is excluded from `./gradlew build`, which keeps the
-default build fast and Docker-free. Running an E2E test from the IDE needs the image to exist
-first, so run `./gradlew e2eTest` (or `./gradlew buildE2eImage`) at least once — otherwise
-Testcontainers tries to pull `payment-gateway:e2e` from Docker Hub and fails.
-
 ## API Documentation
-For documentation openAPI is included, and it can be found under the following url: **http://localhost:8090/swagger-ui/index.html**
 
-## Bank failures
+For documentation openAPI is included, and it can be found under the following url:
+**http://localhost:8090/swagger-ui/index.html**
 
-Failures when contacting the acquiring bank fall into three buckets, listed in `BankFailure`. Each is
+## Responses
+
+The Payment Gateway should always return a response, avoiding an internal error wherever possible.
+For a valid, successful payment request or payment fetch, the processed payment details should be
+returned with a `payment_status` of `Authorized` or `Declined`. Otherwise, the response should be an
+error with `payment_status` `Rejected` and relevant details.
+
+Errors can occur primarily in two distinct situations:
+
+- A payment request could not be parsed successfully
+- The acquiring bank induced a failure
+
+If any error does not fall into a known category, we return a 500 as a fallback.
+
+### Request failures
+
+- 400 if a field fails validation (e.g. wrong type, too long/ short, outside a reasonable range)
+- 405 if the method does not exist
+- 404 if a requested payment does not exist
+
+### Bank failures
+
+Failures when contacting the acquiring bank fall into three buckets, listed in `BankFailure`. Each
+is
 returned as `application/problem+json` with `payment_status: Rejected`.
 
 | Case                                                      | Status | `detail`                                                   |
@@ -57,3 +99,10 @@ returned as `application/problem+json` with `payment_status: Rejected`.
 
 Connect and read timeouts default to 2s and 5s, overridable with `PAYMENTS_BANK_CONNECT_TIMEOUT`
 and `PAYMENTS_BANK_READ_TIMEOUT`.
+
+## Observability
+
+The Payment Gateway has logs encompassing various log levels, for increasingly detailed debugging
+needs.
+
+It also has an actuator, which exposes typical metrics, found at http://localhost:8090/actuator/.
