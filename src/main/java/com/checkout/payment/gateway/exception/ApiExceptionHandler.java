@@ -61,14 +61,15 @@ public class ApiExceptionHandler {
         ? "Invalid value for '%s'".formatted(fieldNameOf(mie))
         : "Request body is not valid JSON";
     LOG.warn("Rejected an unreadable request body: {}", detail);
-    return problem(HttpStatus.BAD_REQUEST, ErrorResponse.malformed(HttpStatus.BAD_REQUEST, detail));
+    return problem(HttpStatus.BAD_REQUEST,
+        ErrorResponse.malformedAtController(HttpStatus.BAD_REQUEST, detail));
   }
 
   @ExceptionHandler(MethodArgumentTypeMismatchException.class)
   public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
     LOG.warn("Rejected a request carrying an invalid value for '{}'", ex.getName());
     return problem(HttpStatus.BAD_REQUEST,
-        ErrorResponse.malformed(HttpStatus.BAD_REQUEST,
+        ErrorResponse.malformedAtController(HttpStatus.BAD_REQUEST,
             "Invalid value for '%s'".formatted(ex.getName())));
   }
 
@@ -76,7 +77,7 @@ public class ApiExceptionHandler {
   public ResponseEntity<ErrorResponse> handleUnsupportedMediaType(
       HttpMediaTypeNotSupportedException ex) {
     LOG.warn("Rejected a request with the unsupported content type '{}'", ex.getContentType());
-    return problem(HttpStatus.UNSUPPORTED_MEDIA_TYPE, ErrorResponse.malformed(
+    return problem(HttpStatus.UNSUPPORTED_MEDIA_TYPE, ErrorResponse.malformedAtController(
         HttpStatus.UNSUPPORTED_MEDIA_TYPE,
         "Content type '%s' is not supported".formatted(ex.getContentType())));
   }
@@ -85,7 +86,7 @@ public class ApiExceptionHandler {
   public ResponseEntity<ErrorResponse> handleMethodNotSupported(
       HttpRequestMethodNotSupportedException ex) {
     LOG.warn("Rejected a request using the unsupported method '{}'", ex.getMethod());
-    return problem(HttpStatus.METHOD_NOT_ALLOWED, ErrorResponse.malformed(
+    return problem(HttpStatus.METHOD_NOT_ALLOWED, ErrorResponse.malformedAtController(
         HttpStatus.METHOD_NOT_ALLOWED,
         "Method '%s' is not supported for this endpoint".formatted(ex.getMethod())));
   }

@@ -20,6 +20,6 @@ public class BankExceptionHandler {
 
     return ResponseEntity.status(failure.status())
         .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-        .body(ErrorResponse.malformed(failure.status(), failure.detail()));
+        .body(ErrorResponse.malformedAtBank(failure.status(), failure.detail()));
   }
 }

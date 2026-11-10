@@ -42,7 +42,7 @@ public class ErrorResponse extends ProblemDetail {
 
     return errorResponse;
   }
-  
+
   /**
    * A missing payment is not a rejected one, so no payment status is reported.
    */
@@ -56,13 +56,19 @@ public class ErrorResponse extends ProblemDetail {
     return errorResponse;
   }
 
-  public static ErrorResponse malformed(HttpStatus status, String detail) {
+  public static ErrorResponse malformedAtController(HttpStatus status, String detail) {
+    ErrorResponse errorResponse = malformedAtBank(status, detail);
+    errorResponse.setPaymentStatus(PaymentStatus.REJECTED);
+
+    return errorResponse;
+  }
+
+  public static ErrorResponse malformedAtBank(HttpStatus status, String detail) {
     ErrorResponse errorResponse = new ErrorResponse();
     errorResponse.setStatus(status);
     errorResponse.setTitle(status.is5xxServerError() ? "Request failed" : "Malformed request");
     errorResponse.setDetail(detail);
     errorResponse.setError(List.of());
-    errorResponse.setPaymentStatus(PaymentStatus.REJECTED);
 
     return errorResponse;
   }

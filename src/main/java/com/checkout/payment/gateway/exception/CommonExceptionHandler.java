@@ -25,7 +25,7 @@ public class CommonExceptionHandler {
   public ResponseEntity<ErrorResponse> handleException(EventProcessingException ex) {
     LOG.error("Returning 500, the request could not be processed", ex);
     return problem(HttpStatus.INTERNAL_SERVER_ERROR,
-        ErrorResponse.malformed(HttpStatus.INTERNAL_SERVER_ERROR,
+        ErrorResponse.malformedAtController(HttpStatus.INTERNAL_SERVER_ERROR,
             "The request could not be processed"));
   }
 
