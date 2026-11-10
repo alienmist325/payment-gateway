@@ -98,8 +98,12 @@ errors.
 
 ## API Documentation
 
-For documentation openAPI is included, and it can be found under the following url:
-**http://localhost:8090/swagger-ui/index.html**
+OpenAPI documentation is generated from the code and served alongside the running application:
+
+- Swagger UI: **http://localhost:8090/swagger-ui/index.html**
+- OpenAPI spec: **http://localhost:8090/v3/api-docs**
+
+Both endpoints are documented with a description, constraints and examples.
 
 ## Storage
 
