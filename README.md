@@ -144,8 +144,9 @@ returned with a `payment_status` of `Authorized` or `Declined`. Otherwise, the r
 error with relevant details, carrying `payment_status` `Rejected` and served as
 `application/problem+json`.
 
-The one exception is a payment that could not be found: a missing payment is not a rejected one, so
-a 404 carries no `payment_status`.
+There are two exceptions, where the gateway rejected nothing and so carries no `payment_status`: a
+404, since a missing payment is not a rejected one, and a bank failure (502, 503), where the
+outcome of the payment is unknown rather than rejected.
 
 Errors can occur primarily in two distinct situations:
 
