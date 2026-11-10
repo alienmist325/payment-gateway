@@ -10,8 +10,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.checkout.payment.gateway.enums.PaymentStatus;
@@ -38,6 +40,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.ResultMatcher;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import reactor.core.publisher.Mono;
 
 /**
  * Validation tests for {@code POST /payment}.
@@ -114,6 +117,15 @@ class PaymentGatewayControllerValidationTest {
   }
 
   /**
+   * The controller answers with a Mono, so an accepted request completes on an async dispatch.
+   */
+  private ResultActions postPaymentAwaitingBank(String json) throws Exception {
+    return mvc.perform(asyncDispatch(postPayment(json)
+        .andExpect(request().asyncStarted())
+        .andReturn()));
+  }
+
+  /**
    * Matches a violation by field rather than by index: the violations come from a Set, so their
    * order in the response is not stable.
    */
@@ -131,7 +143,8 @@ class PaymentGatewayControllerValidationTest {
 
   private void stubAuthorized() {
     UUID id = UUID.randomUUID();
-    when(requestService.processPayment(any(PostPaymentRequest.class))).thenReturn(id);
+    when(requestService.processPayment(any(PostPaymentRequest.class)))
+        .thenReturn(Mono.just(id));
     when(requestService.getPaymentById(id)).thenReturn(new PaymentResponse(
         id, PaymentStatus.AUTHORIZED, 200, "1111",
         FUTURE.getMonthValue(), FUTURE.getYear(), "GBP", 1000, null));
@@ -143,7 +156,7 @@ class PaymentGatewayControllerValidationTest {
   void validRequestIsAcceptedAndReachesTheService() throws Exception {
     stubAuthorized();
 
-    postPayment(write(validBody()))
+    postPaymentAwaitingBank(write(validBody()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.payment_status").value("Authorized"));
 

@@ -4,8 +4,10 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.checkout.payment.gateway.enums.PaymentStatus;
@@ -27,6 +29,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import reactor.core.publisher.Mono;
 
 /**
  * What a client receives when the call to the bank fails.
@@ -59,13 +62,19 @@ class PaymentGatewayControllerBankFailureTest {
     }
   }
 
+  /**
+   * The bank is called reactively, so the failure surfaces on the async dispatch rather than from
+   * the controller method itself.
+   */
   private ResultActions postPaymentFailingWith(BankFailure failure) throws Exception {
     when(requestService.processPayment(any()))
-        .thenThrow(new BankException(failure, "Bank returned 500"));
+        .thenReturn(Mono.error(new BankException(failure, "Bank returned 500")));
 
-    return mvc.perform(MockMvcRequestBuilders.post("/payment")
+    return mvc.perform(asyncDispatch(mvc.perform(MockMvcRequestBuilders.post("/payment")
         .contentType(MediaType.APPLICATION_JSON)
-        .content(validBody()));
+        .content(validBody()))
+        .andExpect(request().asyncStarted())
+        .andReturn()));
   }
 
   @Test

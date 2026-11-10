@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 @RestController("api")
 @RequestMapping("/payment")
@@ -35,14 +36,20 @@ public class PaymentGatewayController {
     return ResponseEntity.ok(payment);
   }
 
+  /**
+   * The request thread is released while the bank is called; the response is written once the
+   * returned {@link Mono} completes.
+   */
   @PostMapping
-  public ResponseEntity<PaymentResponse> postPayment(
+  public Mono<ResponseEntity<PaymentResponse>> postPayment(
       @RequestBody @Valid PostPaymentRequest postPaymentRequest) {
     LOG.info("Accepted a payment request for {} {}", postPaymentRequest.amount(),
         postPaymentRequest.currency());
-    UUID id = requestService.processPayment(postPaymentRequest);
-    PaymentResponse payment = requestService.getPaymentById(id);
-    LOG.info("Payment {} finished with status {}", id, payment.paymentStatus());
-    return ResponseEntity.ok(payment);
+    return requestService.processPayment(postPaymentRequest)
+        .map(id -> {
+          PaymentResponse payment = requestService.getPaymentById(id);
+          LOG.info("Payment {} finished with status {}", id, payment.paymentStatus());
+          return ResponseEntity.ok(payment);
+        });
   }
 }

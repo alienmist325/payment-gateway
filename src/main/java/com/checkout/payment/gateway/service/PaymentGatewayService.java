@@ -1,6 +1,5 @@
 package com.checkout.payment.gateway.service;
 
-import com.checkout.payment.gateway.model.BankPaymentResponse;
 import com.checkout.payment.gateway.model.PaymentData;
 import com.checkout.payment.gateway.model.PaymentRequestData;
 import com.checkout.payment.gateway.processor.PaymentsProcessor;
@@ -11,6 +10,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
 @Service
 public class PaymentGatewayService {
@@ -30,26 +30,32 @@ public class PaymentGatewayService {
     return paymentsRepository.get(id);
   }
 
-  public UUID processPayment(PaymentRequestData paymentRequest) {
+  /**
+   * Submits the payment to the bank and stores the outcome, completing with the stored payment's
+   * ID once the bank has answered.
+   */
+  public Mono<UUID> processPayment(PaymentRequestData paymentRequest) {
     String cardLastFour = paymentRequest.getCardNumberLastFour();
-    LOG.info("Submitting a payment of {} {} on the card ending {} to the bank",
-        paymentRequest.amount(), paymentRequest.currency(), cardLastFour);
 
-    BankPaymentResponse bankPaymentResponse = paymentsProcessor.process(
-        paymentRequest);
-    LOG.info("The bank {} the payment on the card ending {}",
-        bankPaymentResponse.isAuthorized() ? "authorized" : "declined", cardLastFour);
+    return Mono.defer(() -> {
+      LOG.info("Submitting a payment of {} {} on the card ending {} to the bank",
+          paymentRequest.amount(), paymentRequest.currency(), cardLastFour);
+      return paymentsProcessor.process(paymentRequest);
+    }).map(bankPaymentResponse -> {
+      LOG.info("The bank {} the payment on the card ending {}",
+          bankPaymentResponse.isAuthorized() ? "authorized" : "declined", cardLastFour);
 
-    PaymentData paymentData = PaymentData.createPaymentData(bankPaymentResponse.isAuthorized(),
-        cardLastFour,
-        paymentRequest.expiryMonth(), paymentRequest.expiryYear(),
-        paymentRequest.currency(), paymentRequest.amount(),
-        bankPaymentResponse.authorizationCode());
-    paymentsRepository.add(paymentData);
-    LOG.info("Stored payment {} as {}", paymentData.id(),
-        paymentData.authorized() ? "authorized" : "declined");
+      PaymentData paymentData = PaymentData.createPaymentData(bankPaymentResponse.isAuthorized(),
+          cardLastFour,
+          paymentRequest.expiryMonth(), paymentRequest.expiryYear(),
+          paymentRequest.currency(), paymentRequest.amount(),
+          bankPaymentResponse.authorizationCode());
+      paymentsRepository.add(paymentData);
+      LOG.info("Stored payment {} as {}", paymentData.id(),
+          paymentData.authorized() ? "authorized" : "declined");
 
-    return paymentData.id();
+      return paymentData.id();
+    });
   }
 
 }

@@ -17,11 +17,14 @@ repositories {
 
 dependencies {
   implementation 'org.springframework.boot:spring-boot-starter-web'
+  // WebClient: the bank is called over non-blocking I/O, so no thread waits on the response.
+  implementation 'org.springframework.boot:spring-boot-starter-webflux'
   implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
   implementation 'org.springframework.boot:spring-boot-starter-validation'
   implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
   testImplementation 'org.springframework.boot:spring-boot-starter-test'
+  testImplementation 'io.projectreactor:reactor-test'
 }
 
 tasks.named('test') {

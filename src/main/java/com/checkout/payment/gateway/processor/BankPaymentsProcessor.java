@@ -10,57 +10,67 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 @Component
 public class BankPaymentsProcessor implements PaymentsProcessor {
 
   private static final Logger LOG = LoggerFactory.getLogger(BankPaymentsProcessor.class);
 
-  private final RestClient paymentClient;
+  private final WebClient paymentClient;
 
-  public BankPaymentsProcessor(RestClient bankRestClient) {
-    this.paymentClient = bankRestClient;
+  public BankPaymentsProcessor(WebClient bankWebClient) {
+    this.paymentClient = bankWebClient;
   }
 
   @Override
-  public BankPaymentResponse process(PaymentRequestData paymentRequestData) {
+  public Mono<BankPaymentResponse> process(PaymentRequestData paymentRequestData) {
     return process(toBankPaymentRequest(paymentRequestData));
   }
 
-  public BankPaymentResponse process(BankPaymentRequest bankPaymentRequest) {
-    BankPaymentResponse response;
+  /**
+   * Posts the payment to the bank. Nothing is sent until the returned {@link Mono} is subscribed
+   * to, and no thread waits on the bank's answer.
+   */
+  public Mono<BankPaymentResponse> process(BankPaymentRequest bankPaymentRequest) {
+    return Mono.defer(() -> {
+      // The request masks the PAN and the CVV when printed, so it is safe to log.
+      LOG.debug("POST /payments to the bank with {}", bankPaymentRequest);
 
-    // The request masks the PAN and the CVV when printed, so it is safe to log.
-    LOG.debug("POST /payments to the bank with {}", bankPaymentRequest);
-
-    try {
-      response = paymentClient
+      return paymentClient
           .post()
           .uri("/payments")
           .contentType(MediaType.APPLICATION_JSON)
           .accept(MediaType.APPLICATION_JSON)
-          .body(bankPaymentRequest)
+          .bodyValue(bankPaymentRequest)
           .retrieve()
-          .onStatus(HttpStatusCode::isError, (request, errorResponse) -> {
-            LOG.warn("The bank responded {} to POST /payments", errorResponse.getStatusCode());
-            throw new BankException(BankFailure.ofBankStatus(errorResponse.getStatusCode()),
-                "Bank returned " + errorResponse.getStatusCode());
+          .onStatus(HttpStatusCode::isError, errorResponse -> {
+            LOG.warn("The bank responded {} to POST /payments", errorResponse.statusCode());
+            return Mono.error(new BankException(
+                BankFailure.ofBankStatus(errorResponse.statusCode()),
+                "Bank returned " + errorResponse.statusCode()));
           })
-          .body(BankPaymentResponse.class);
-    } catch (RestClientException ex) {
-      LOG.warn("Could not complete POST /payments to the bank: {}", ex.getMessage());
-      throw new BankException(BankFailure.BANK_UNREACHABLE, "Call to the bank failed", ex);
-    }
+          .bodyToMono(BankPaymentResponse.class)
+          .onErrorMap(ex -> !(ex instanceof BankException), BankPaymentsProcessor::unreachable)
+          .switchIfEmpty(Mono.error(BankPaymentsProcessor::noDecision))
+          .flatMap(response -> response.authorized() == null
+              ? Mono.error(noDecision())
+              : Mono.just(response))
+          .doOnNext(response -> LOG.debug(
+              "The bank responded to POST /payments with authorized={}", response.authorized()));
+    });
+  }
 
-    if (response == null || response.authorized() == null) {
-      LOG.warn("The bank responded to POST /payments without an authorization decision");
-      throw new BankException(BankFailure.BANK_UNREACHABLE,
-          "Bank returned no authorization decision");
-    }
-    LOG.debug("The bank responded to POST /payments with authorized={}", response.authorized());
-    return response;
+  private static BankException unreachable(Throwable ex) {
+    LOG.warn("Could not complete POST /payments to the bank: {}", ex.getMessage());
+    return new BankException(BankFailure.BANK_UNREACHABLE, "Call to the bank failed", ex);
+  }
+
+  private static BankException noDecision() {
+    LOG.warn("The bank responded to POST /payments without an authorization decision");
+    return new BankException(BankFailure.BANK_UNREACHABLE,
+        "Bank returned no authorization decision");
   }
 
   private static BankPaymentRequest toBankPaymentRequest(PaymentRequestData paymentRequest) {
